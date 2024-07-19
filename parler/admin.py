@@ -55,7 +55,7 @@ from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
 from django.utils.translation import get_language
 from django.utils.translation import gettext_lazy as _
-
+from django.http import JsonResponse
 from parler import appsettings
 from parler.forms import TranslatableBaseInlineFormSet, TranslatableModelForm
 from parler.managers import TranslatableQuerySet
@@ -323,6 +323,11 @@ class TranslatableAdmin(BaseTranslatableAdmin, admin.ModelAdmin):
                     r"^(.+)/change/delete-translation/(.+)/$",
                     self.admin_site.admin_view(self.delete_translation),
                     name="{}_{}_delete_translation".format(*info),
+                ), 
+                re_path(
+                    r"^(.+)/change/suggest-translation/(.+)/$",
+                    self.admin_site.admin_view(self.suggest_translations),
+                    name="{}_{}_suggest_translation".format(*info),
                 )
             ] + urlpatterns
 
@@ -400,7 +405,48 @@ class TranslatableAdmin(BaseTranslatableAdmin, admin.ModelAdmin):
                 delimiter = "&" if len(redirect_parts) > 1 else "?"
                 redirect["Location"] += f"{delimiter}{self.query_language_key}={language}"
         return redirect
+    
+    def suggest_translations(self, request, object_id, language_code):
+        """
+        The 'suggest translation' ajax endpoint for this object. Requires external api key.
+        """
+        from parler import appsettings
+        from parler.utils.views import translate_by_deepl
+        if appsettings.PARLER_ALLOW_AUTO_TRANSLATION and not appsettings.PARLER_DEEPL_API_KEY:
+            return JsonResponse({"status": 0, "message": _("Missing DEEPL api key")})
+        opts = self.model._meta
+        root_model = self.model._parler_meta.root_model
 
+        # Get object and translation
+        shared_obj = self.get_object(request, unquote(object_id))
+        if shared_obj is None:
+            raise Http404
+
+        shared_obj.set_current_language(language_code)
+        try:
+            translation = root_model.objects.get(master=shared_obj, language_code=language_code)
+        except root_model.DoesNotExist:
+            raise Http404
+        fields_to_exclude = ["master", "id", "language_code"]
+        fields_to_translate = []
+        values_to_translate = []
+        for field in translation._meta.fields:
+            if field.name not in fields_to_exclude:
+                
+                if getattr(translation, field.name):
+                    fields_to_translate.append(field.name)
+                    values_to_translate.append(getattr(translation, field.name))
+        
+        translations = translate_by_deepl(
+            values_to_translate,
+            source_language=language_code, 
+            target_language=request.GET.get("targetLanguage"),
+            auth_key=appsettings.PARLER_DEEPL_API_KEY,
+        )
+        data = zip(fields_to_translate, [translation.get("text") for translation in translations.get("translations")])
+        
+        
+        return JsonResponse({"status": 0, "translations": {tr[0]: tr[1] for tr in data}})
     @csrf_protect_m
     @transaction.atomic
     def delete_translation(self, request, object_id, language_code):

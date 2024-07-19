@@ -1,6 +1,44 @@
 {% extends default_change_form_template|default:"admin/change_form.html" %}
-
+{% load i18n %}
+{% block object-tools-items %}
+<li>
+    {% for url,name,code,status in language_tabs %}
+        {% if status == "available" %}
+            <a href="./suggest-translation/{{ code }}/" class="copy-translations-link">
+                {{code}}
+            </a>
+        {% endif %}
+    {% endfor %}   
+</li>
+{{block.super}}
+{% endblock %}
 {% block field_sets %}
 {% if language_tabs %}{% include "admin/parler/language_tabs.html" %}{% endif %}
 {{ block.super }}
+{% endblock %}
+
+
+{% block admin_change_form_document_ready %}
+   {{block.super}}
+    <script>
+        
+        {% for url,name,code,status in language_tabs %}
+            {% if status == "current" %}
+                let targetLanguage = "{{code}}";
+            {% endif %}
+        {% endfor %} 
+        document.addEventListener("click", (e) => {
+            if (e.target.classList.contains("copy-translations-link")) {
+                e.preventDefault();
+                fetch(`${e.target.href}?targetLanguage=${targetLanguage}`)
+                .then(res => res.json())
+                .then(data => suggestTranslations(data))
+            }
+        })
+        function suggestTranslations(data) {
+            for (const property in data.translations) {
+                document.getElementById(`id_${property}`).value = data.translations[property];
+            }
+        }
+    </script>
 {% endblock %}

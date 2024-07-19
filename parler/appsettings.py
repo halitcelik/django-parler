@@ -34,3 +34,7 @@ PARLER_LANGUAGES = add_default_language_settings(PARLER_LANGUAGES)
 
 # Activate translations by default. Flag to compensate for Django >= 1.8 default `get_language` behavior
 PARLER_DEFAULT_ACTIVATE = getattr(settings, "PARLER_DEFAULT_ACTIVATE", False)
+
+
+PARLER_ALLOW_AUTO_TRANSLATION = getattr(settings, "PARLER_ALLOW_AUTO_TRANSLATION", False)
+PARLER_DEEPL_API_KEY = getattr(settings, "PARLER_DEEPL_API_KEY", None)
