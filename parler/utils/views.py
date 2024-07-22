@@ -1,6 +1,7 @@
 """
 Internal DRY functions.
 """
+
 from django.conf import settings
 from parler import appsettings
 from parler.utils import get_language_title, is_multilingual_project, normalize_language_code
@@ -37,7 +38,7 @@ def get_language_tabs(request, current_language, available_languages, css_class=
     tab_languages = []
 
     site_id = getattr(settings, "SITE_ID", None)
-    
+
     for lang_dict in appsettings.PARLER_LANGUAGES.get(site_id, ()):
         code = lang_dict["code"]
         title = get_language_title(code)
@@ -84,6 +85,7 @@ class TabsList(list):
 
 def translate_by_deepl(texts, source_language, target_language, auth_key):
     import requests
+
     if auth_key.lower().endswith(":fx"):
         endpoint = "https://api-free.deepl.com"
     else:
@@ -98,4 +100,7 @@ def translate_by_deepl(texts, source_language, target_language, auth_key):
             "text": texts,
         },
     )
-    return r.json()
+    if r.status_code == 200:
+        return r.json()
+    else:
+        return {}

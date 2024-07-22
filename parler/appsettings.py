@@ -1,6 +1,7 @@
 """
 Overview of all settings which can be customized.
 """
+
 from django.conf import settings
 
 from parler.utils import get_parler_languages_from_django_cms, normalize_language_code
@@ -37,4 +38,4 @@ PARLER_DEFAULT_ACTIVATE = getattr(settings, "PARLER_DEFAULT_ACTIVATE", False)
 
 
 PARLER_ALLOW_AUTO_TRANSLATION = getattr(settings, "PARLER_ALLOW_AUTO_TRANSLATION", False)
-PARLER_DEEPL_API_KEY = getattr(settings, "PARLER_DEEPL_API_KEY", None)
+PARLER_DEEPL_API_KEY = getattr(settings, "DEEPL_API_KEY", None)

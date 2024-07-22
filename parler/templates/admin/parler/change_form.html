@@ -1,17 +1,42 @@
 {% extends default_change_form_template|default:"admin/change_form.html" %}
 {% load i18n %}
+
+
+{% block extrahead %}
+{{block.super}}
+{% if suggest_translations %}    
+<style>
+    .object-tools li {
+        float:right;
+    }
+    .object-tools li.new-row {
+        float: none;
+        clear: both;
+        margin-top: 2.5rem;
+    }
+</style>
+{% endif %}
+{% endblock extrahead %}
+
+    
+
+
 {% block object-tools-items %}
-<li>
+{{block.super}}
+{% if suggest_translations %}    
+<li class="new-row">
+    <span style="float: left;line-height: 1.65rem;margin-right: 0.5rem;">Copy translations from:</span>
     {% for url,name,code,status in language_tabs %}
         {% if status == "available" %}
-            <a href="./suggest-translation/{{ code }}/" class="copy-translations-link">
+            <a href="./suggest-translation/{{ code }}/" class="copy-translations-link" style="margin-left: 0.25rem">
                 {{code}}
             </a>
         {% endif %}
     {% endfor %}   
 </li>
-{{block.super}}
+{% endif %}
 {% endblock %}
+
 {% block field_sets %}
 {% if language_tabs %}{% include "admin/parler/language_tabs.html" %}{% endif %}
 {{ block.super }}
@@ -19,7 +44,8 @@
 
 
 {% block admin_change_form_document_ready %}
-   {{block.super}}
+{{block.super}}
+{% if suggest_translations %}
     <script>
         
         {% for url,name,code,status in language_tabs %}
@@ -41,4 +67,5 @@
             }
         }
     </script>
+{% endif %}
 {% endblock %}
