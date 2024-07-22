@@ -410,16 +410,42 @@ class TranslatableAdmin(BaseTranslatableAdmin, admin.ModelAdmin):
                 redirect["Location"] += f"{delimiter}{self.query_language_key}={language}"
         return redirect
 
+    def _get_translations_for_model(self, model, source_language, target_language):
+        from parler.utils.views import translate_by_deepl
+
+        fields_to_exclude = ["master", "id", "language_code"]
+        fields_to_translate = []
+        values_to_translate = []
+        for field in model._meta.fields:
+            if field.name not in fields_to_exclude:
+                if getattr(model, field.name):
+                    fields_to_translate.append(field.name)
+                    values_to_translate.append(getattr(model, field.name))
+
+        if len(values_to_translate):
+            # Deepl api takes a list of sentences and returns translations in the same order.
+            translations = translate_by_deepl(
+                values_to_translate,
+                source_language=source_language,
+                target_language=target_language,
+                auth_key=appsettings.PARLER_DEEPL_API_KEY,
+            )
+            if translations and len(translations.get("translations")) == len(fields_to_translate):
+                data = zip(
+                    fields_to_translate,
+                    [translation.get("text") for translation in translations.get("translations")],
+                )
+            return {tr[0]: tr[1] for tr in data}
+        return {}
+
     def suggest_translations(self, request, object_id, language_code):
         """
         The 'suggest translation' ajax endpoint for this object. Requires external api key.
         """
         from parler import appsettings
-        from parler.utils.views import translate_by_deepl
 
         if not appsettings.PARLER_DEEPL_API_KEY:
             return JsonResponse({"status": 0, "message": _("Missing DEEPL api key")})
-        opts = self.model._meta
         root_model = self.model._parler_meta.root_model
         # Get object and translation
         shared_obj = self.get_object(request, unquote(object_id))
@@ -428,34 +454,23 @@ class TranslatableAdmin(BaseTranslatableAdmin, admin.ModelAdmin):
 
         shared_obj.set_current_language(language_code)
         try:
-            translation = root_model.objects.get(master=shared_obj, language_code=language_code)
+            model = root_model.objects.get(master=shared_obj, language_code=language_code)
         except root_model.DoesNotExist:
             raise Http404
-        fields_to_exclude = ["master", "id", "language_code"]
-        fields_to_translate = []
-        values_to_translate = []
-        for field in translation._meta.fields:
-            if field.name not in fields_to_exclude:
-
-                if getattr(translation, field.name):
-                    fields_to_translate.append(field.name)
-                    values_to_translate.append(getattr(translation, field.name))
-        if len(values_to_translate):
-            # Deepl api takes a list of sentences and returns translations in the same order.
-            translations = translate_by_deepl(
-                values_to_translate,
-                source_language=language_code,
-                target_language=request.GET.get("targetLanguage"),
-                auth_key=appsettings.PARLER_DEEPL_API_KEY,
-            )
-            if translations and len(translations.get("translations")) == len(fields_to_translate):
-                data = zip(
-                    fields_to_translate,
-                    [translation.get("text") for translation in translations.get("translations")],
+        translations = self._get_translations_for_model(
+            model, language_code, request.GET.get("targetLanguage")
+        )
+        inline_translations = {}
+        for inline, qs in self._get_inline_translations(request, language_code, obj=shared_obj):
+            inline_translations[inline.model.__name__.lower()] = [
+                self._get_translations_for_model(
+                    inline_model, language_code, request.GET.get("targetLanguage")
                 )
-
-                return JsonResponse({"status": 0, "translations": {tr[0]: tr[1] for tr in data}})
-        return JsonResponse({"status": 0, "translations": {}})
+                for inline_model in qs
+            ]
+        return JsonResponse(
+            {"status": 0, "translations": translations, "inline_translations": inline_translations}
+        )
 
     @csrf_protect_m
     @transaction.atomic
